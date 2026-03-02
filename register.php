@@ -36,12 +36,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html>
 <head>
     <title>Register - AllowanceSense</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/login.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-box">
-            <img src="images/wallet-icon.png" alt="Wallet Icon" class="icon">
+            <img src="img/logo-icon.png" alt="Wallet Icon" class="icon">
             <h2>Create Account</h2>
             <p>Register to start using AllowanceSense</p>
 

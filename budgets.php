@@ -52,15 +52,17 @@ $budgetQuery = $conn->query("SELECT b.id, b.budget_limit, c.category_name,
     </style>
 </head>
 <body>
-    <div class="nav">
-        <div>AllowanceSense</div>
-        <div>
-            <a href="dashboard.php">Dashboard</a>
-            <a href="view_expenses.php">Expenses</a>
-            <a href="allowances.php">Allowance</a>
-            <a href="budgets.php">Budget</a>
-            <a href="logout.php">Logout</a>
-        </div>
+    <div class="sidebar">
+        <h2>AllowanceSense</h2>
+        <a href="dashboard.php">Dashboard</a>
+        <a href="expenses.php">Expenses</a>
+        <a href="allowances.php">Allowance</a>
+        <a href="budgets.php" class="active">Budget</a>
+        <a href="reports.php">Reports</a>
+        <a href="categories.php">Categories</a>
+        <a href="activity_log.php">Activity Log</a>
+        <a href="settings.php">Settings</a>
+        <a href="logout.php">Logout</a>
     </div>
 
     <div class="container">
