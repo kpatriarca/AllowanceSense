@@ -1,6 +1,7 @@
-<?php
+<?php 
 session_start();
 require 'config/connection.php';
+require_once __DIR__ . "/includes/logger.php";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -12,25 +13,16 @@ $uid = $_SESSION['user_id'];
 $search = isset($_GET['search']) ? $_GET['search'] : "";
 $filter_category = isset($_GET['category']) ? $_GET['category'] : "";
 
-/* =============================
-   PAGINATION SETTINGS
-============================= */
-$limit = 5;
+$limit = 12;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if($page < 1) $page = 1;
 $start = ($page - 1) * $limit;
 
-/* =============================
-   FETCH USER CATEGORIES
-============================= */
 $catQuery = $conn->prepare("SELECT id, category_name FROM categories WHERE user_id=?");
 $catQuery->bind_param("i", $uid);
 $catQuery->execute();
 $catResult = $catQuery->get_result();
 
-/* =============================
-   HANDLE ADD EXPENSE
-============================= */
 if (isset($_POST['add_expense'])) {
 
     $desc = $_POST['description'];
@@ -58,7 +50,14 @@ if (isset($_POST['add_expense'])) {
     $stmt->bind_param("iissss", $uid, $category_id, $desc, $amount, $date, $receiptName);
     $stmt->execute();
 
-    header("Location: view_expenses.php");
+    logActivity(
+    $conn,
+    $uid,
+    "Added Expense",
+    "Description: $desc | Amount: ₱$amount"
+    );
+
+    header("Location: expenses.php");
     exit();
 }
 
@@ -67,10 +66,24 @@ if (isset($_POST['add_expense'])) {
 ============================= */
 if(isset($_GET['delete'])){
     $id = (int)$_GET['delete'];
+
+    $get = $conn->prepare("SELECT description, amount FROM expenses WHERE id=? AND user_id=?");
+    $get->bind_param("ii", $id, $uid);
+    $get->execute();
+    $exp = $get->get_result()->fetch_assoc();
+
     $del = $conn->prepare("DELETE FROM expenses WHERE id=? AND user_id=?");
     $del->bind_param("ii", $id, $uid);
     $del->execute();
-    header("Location: view_expenses.php");
+
+    logActivity(
+        $conn,
+        $uid,
+        "Deleted Expense",
+        "Description: ".$exp['description']." | Amount: ₱".$exp['amount']
+    );
+
+    header("Location: expenses.php");
     exit();
 }
 
@@ -138,34 +151,35 @@ $totalPages = ceil($totalResult['total'] / $limit);
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Expenses - AllowanceSense</title>
-    <link rel="stylesheet" href="css/style.css">
+<title>Expenses - AllowanceSense</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
 <div class="dashboard">
 
 <div class="sidebar">
-    <h2>AllowanceSense</h2>
-    <a href="dashboard.php">Dashboard</a>
-    <a href="expenses.php" class="active">Expenses</a>
-    <a href="allowances.php">Allowance</a>
-    <a href="budgets.php">Budget</a>
-    <a href="reports.php">Reports</a>
-    <a href="categories.php">Categories</a>
-    <a href="activity_log.php">Activity Log</a>
-    <a href="settings.php">Settings</a>
-    <a href="logout.php">Logout</a>
+<h2>AllowanceSense</h2>
+<a href="dashboard.php">Dashboard</a>
+<a href="expenses.php" class="active">Expenses</a>
+<a href="allowances.php">Allowance</a>
+<a href="budgets.php">Budget</a>
+<a href="reports.php">Reports</a>
+<a href="categories.php">Categories</a>
+<a href="activity_log.php">Activity Log</a>
+<a href="settings.php">Settings</a>
+<a href="logout.php">Logout</a>
 </div>
 
 <div class="content">
 
-<div class="page-header">
-    <div>
-        <h1>Expenses</h1>
-        <p>Manage and track your spending</p>
-    </div>
-    <button class="btn primary" onclick="toggleForm()">+ Add Expense</button>
+<div class="top-header">
+<div>
+<h1>Expenses</h1>
+<p>Manage and track your spending</p>
+</div>
+<button class="btn primary" onclick="toggleForm()">+ Add Expense</button>
 </div>
 
 <!-- ADD EXPENSE FORM -->
@@ -188,14 +202,17 @@ $totalPages = ceil($totalResult['total'] / $limit);
 <label>Category</label>
 <select name="category_id" required>
 <option value="">Select Category</option>
+
 <?php
 $catQuery->execute();
 $catResult = $catQuery->get_result();
 while($cat = $catResult->fetch_assoc()):
 ?>
+
 <option value="<?= $cat['id'] ?>">
 <?= htmlspecialchars($cat['category_name']) ?>
 </option>
+
 <?php endwhile; ?>
 </select>
 </div>
@@ -208,7 +225,7 @@ while($cat = $catResult->fetch_assoc()):
 <div class="form-group">
 <label>Upload Receipt</label>
 <input type="file" name="receipt" id="receiptInput" accept="image/*">
-<img id="receiptPreview" style="display:none; margin-top:10px; width:120px; border-radius:8px;">
+<img id="receiptPreview" style="display:none;margin-top:10px;width:120px;border-radius:8px;">
 </div>
 
 </div>
@@ -241,12 +258,17 @@ $catQuery2 = $conn->prepare("SELECT id, category_name FROM categories WHERE user
 $catQuery2->bind_param("i", $uid);
 $catQuery2->execute();
 $catResult2 = $catQuery2->get_result();
+
 while($cat = $catResult2->fetch_assoc()):
 ?>
+
 <option value="<?= $cat['id'] ?>"
 <?= ($filter_category == $cat['id']) ? 'selected' : '' ?>>
+
 <?= htmlspecialchars($cat['category_name']) ?>
+
 </option>
+
 <?php endwhile; ?>
 </select>
 
@@ -254,6 +276,7 @@ while($cat = $catResult2->fetch_assoc()):
 </div>
 
 <table>
+
 <thead>
 <tr>
 <th>Date</th>
@@ -266,13 +289,26 @@ while($cat = $catResult2->fetch_assoc()):
 </thead>
 
 <tbody>
+
 <?php if($result->num_rows > 0): ?>
 <?php while($row = $result->fetch_assoc()): ?>
+
 <tr>
+
 <td><?= $row['expense_date'] ?></td>
+
 <td><?= htmlspecialchars($row['description']) ?></td>
-<td><span class="category-pill"><?= htmlspecialchars($row['category_name']) ?></span></td>
-<td class="amount">₱<?= number_format($row['amount'],2) ?></td>
+
+<td>
+<span class="category-pill">
+<?= htmlspecialchars($row['category_name']) ?>
+</span>
+</td>
+
+<td class="amount">
+₱<?= number_format($row['amount'],2) ?>
+</td>
+
 <td>
 <?php if($row['receipt']): ?>
 <a href="uploads/<?= $row['receipt'] ?>" target="_blank">View</a>
@@ -280,77 +316,140 @@ while($cat = $catResult2->fetch_assoc()):
 —
 <?php endif; ?>
 </td>
+
 <td>
-<a href="?delete=<?= $row['id'] ?>"
+
+<button 
 class="delete-btn"
-onclick="return confirm('Delete this expense?')">
+onclick="openDeletePopup(<?= $row['id'] ?>)">
 Delete
-</a>
+</button>
+
 </td>
+
 </tr>
+
 <?php endwhile; ?>
+
 <?php else: ?>
+
 <tr>
 <td colspan="6">No expenses found.</td>
 </tr>
+
 <?php endif; ?>
+
 </tbody>
 </table>
 
 <!-- PAGINATION -->
 <div class="pagination">
+
 <?php for($i=1;$i<=$totalPages;$i++): ?>
+
 <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&category=<?= $filter_category ?>"
 class="page-btn <?= ($page==$i)?'active':'' ?>">
+
 <?= $i ?>
+
 </a>
+
 <?php endfor; ?>
+
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- DELETE POPUP -->
+<div id="deletePopup" class="popup">
+
+<div class="popup-content">
+
+<h3>Delete Expense</h3>
+<p>Are you sure you want to delete this expense?</p>
+
+<div class="popup-buttons">
+
+<button onclick="closeDeletePopup()" class="btn cancel">
+Cancel
+</button>
+
+<a id="confirmDeleteBtn" class="btn delete">
+Delete
+</a>
+
 </div>
 
 </div>
 </div>
 
 <script>
+
 function toggleForm(){
-    var form = document.getElementById("expenseForm");
-    form.style.display = form.style.display === "none" ? "block" : "none";
+var form = document.getElementById("expenseForm");
+form.style.display = form.style.display === "none" ? "block" : "none";
 }
 
 /* RECEIPT PREVIEW */
 document.getElementById("receiptInput").addEventListener("change", function(e){
-    const file = e.target.files[0];
-    const preview = document.getElementById("receiptPreview");
 
-    if(file){
-        preview.src = URL.createObjectURL(file);
-        preview.style.display = "block";
-    }
+const file = e.target.files[0];
+const preview = document.getElementById("receiptPreview");
+
+if(file){
+preview.src = URL.createObjectURL(file);
+preview.style.display = "block";
+}
+
 });
 
-/* ===========================
-   🔎 LIVE AUTO SEARCH
-=========================== */
+/* LIVE SEARCH */
 
 const searchInput = document.querySelector("input[name='search']");
 const categorySelect = document.querySelector("select[name='category']");
 const filterForm = document.getElementById("filterForm");
 
 let typingTimer;
-const doneTypingInterval = 400; // milliseconds delay
+const doneTypingInterval = 400;
 
-// Search while typing (with small delay)
-searchInput.addEventListener("keyup", function () {
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(function () {
-        filterForm.submit();
-    }, doneTypingInterval);
+searchInput.addEventListener("keyup", function(){
+
+clearTimeout(typingTimer);
+
+typingTimer = setTimeout(function(){
+
+filterForm.submit();
+
+}, doneTypingInterval);
+
 });
 
-// Filter instantly when category changes
-categorySelect.addEventListener("change", function () {
-    filterForm.submit();
+categorySelect.addEventListener("change", function(){
+
+filterForm.submit();
+
 });
+
+/* DELETE POPUP */
+
+function openDeletePopup(id){
+
+document.getElementById("deletePopup").style.display = "flex";
+
+document.getElementById("confirmDeleteBtn").href = "?delete=" + id;
+
+}
+
+function closeDeletePopup(){
+
+document.getElementById("deletePopup").style.display = "none";
+
+}
+
 </script>
 
 </body>
 </html>
+```

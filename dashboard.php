@@ -78,30 +78,33 @@ $remaining = max(0, $allowance - $total);
 
 /* RECENT EXPENSES */
 $recentExpenses = $conn->query("
-    SELECT e.description, e.amount, c.category_name 
+    SELECT e.description, e.amount, c.category_name, c.color 
     FROM expenses e 
     LEFT JOIN categories c ON e.category_id = c.id 
     WHERE e.user_id=$uid 
-    ORDER BY e.expense_date DESC 
-    LIMIT 5
+    ORDER BY e.expense_date DESC
 ");
 
 /* SPENDING BY CATEGORY (THIS MONTH ONLY) */
 $categoryLabels = [];
 $categoryData = [];
+$categoryColors = [];
 
 $catQuery = $conn->query("
-    SELECT c.category_name, SUM(e.amount) as total
-    FROM expenses e
-    JOIN categories c ON e.category_id = c.id
-    WHERE e.user_id = $uid
-    AND e.expense_date BETWEEN '$start_date' AND '$end_date'
-    GROUP BY e.category_id
+SELECT c.category_name, c.color, SUM(e.amount) as total
+FROM expenses e
+JOIN categories c ON e.category_id = c.id
+WHERE e.user_id = $uid
+AND e.expense_date BETWEEN '$start_date' AND '$end_date'
+GROUP BY e.category_id
 ");
 
 while ($row = $catQuery->fetch_assoc()) {
-    $categoryLabels[] = $row['category_name'];
-    $categoryData[] = $row['total'];
+
+$categoryLabels[] = $row['category_name'];
+$categoryData[] = $row['total'];
+$categoryColors[] = $row['color'];
+
 }
 ?>
 
@@ -140,9 +143,10 @@ while ($row = $catQuery->fetch_assoc()) {
                 <p>It's <?= $currentDate ?></p>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
-                <form method="POST" id="goalForm" style="display:none; gap:5px; align-items:center;">
+                <form method="POST" id="goalForm" class="goal-box" style="display:none; gap:5px; align-items:center;">
                     <input type="number" name="new_goal" step="0.01" 
-                        placeholder="Enter amount" required style="width:120px;">
+                        placeholder="Enter amount" required>
+
                     <button type="submit" name="update_goal" class="btn">Save</button>
                 </form>
 
@@ -151,7 +155,7 @@ while ($row = $catQuery->fetch_assoc()) {
                 </button>
 
                 <a href="allowances.php" class="btn">Set Allowance</a>
-                <a href="view_expenses.php" class="btn">Add Expense</a>
+                <a href="expenses.php" class="btn">Add Expense</a>
 
             </div>
         </div>
@@ -178,32 +182,51 @@ while ($row = $catQuery->fetch_assoc()) {
 
         <div class="main-grid">
 
-            <!-- RECENT EXPENSES -->
-            <div class="box">
-                <h3>Recent Expenses</h3>
-                <?php while($row = $recentExpenses->fetch_assoc()): ?>
+            <!-- LEFT SIDE -->
+            <div>
+
+                <!-- RECENT EXPENSES -->
+                <div class="box expense-box">
+                    <h3>Recent Expenses</h3>
+
+                    <?php while($row = $recentExpenses->fetch_assoc()): ?>
+
                     <div class="expense-item">
-                        <div>
-                            <strong><?= htmlspecialchars($row['description']) ?></strong><br>
-                            <small><?= $row['category_name'] ?></small>
+
+                        <div class="expense-left">
+                            <div class="expense-icon" style="background:<?= $row['color'] ?? '#ccc' ?>">
+                                <?= strtoupper(substr($row['category_name'],0,1)) ?>
+                            </div>
+
+                            <div>
+                                <strong><?= htmlspecialchars($row['description']) ?></strong><br>
+                                <small><?= $row['category_name'] ?></small>
+                            </div>
                         </div>
+
                         <div>
                             ₱<?= number_format($row['amount'],2) ?>
                         </div>
+
                     </div>
-                <?php endwhile; ?>
+
+                    <?php endwhile; ?>
+
+                </div>
+
             </div>
 
+            <!-- RIGHT SIDE -->
             <div>
 
                 <!-- CHART -->
-                <div class="box" style="margin-bottom:20px;">
+                <div class="box chart-box">
                     <h3>Spending by Category</h3>
                     <canvas id="categoryChart"></canvas>
                 </div>
 
                 <!-- BUDGET STATUS -->
-                <div class="box">
+                <div class="status-box">
                     <h3>Budget Status</h3>
 
                     <?php
@@ -241,6 +264,9 @@ while ($row = $catQuery->fetch_assoc()) {
                         </div>
 
                     <?php } ?>
+                    <div class="manage-budget-container">
+                        <a href="budgets.php" class="manage-budget-btn">Manage Budgets</a>
+                    </div>
                 </div>
 
             </div>
@@ -254,20 +280,23 @@ const labels = <?= json_encode($categoryLabels) ?>;
 const dataValues = <?= json_encode($categoryData) ?>;
 
 if (labels.length > 0) {
-    new Chart(document.getElementById('categoryChart'), {
+        new Chart(document.getElementById('categoryChart'), {
         type: 'doughnut',
         data: {
             labels: labels,
             datasets: [{
                 data: dataValues,
-                backgroundColor: [
-                    '#ef4444','#f59e0b','#8b5cf6',
-                    '#10b981','#ec4899','#3b82f6','#6b7280'
-                ]
+                backgroundColor: <?= json_encode($categoryColors) ?>
             }]
         },
         options: {
-            plugins: { legend: { position: 'bottom' } }
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{
+                    position:'bottom'
+                }
+            }
         }
     });
 } else {

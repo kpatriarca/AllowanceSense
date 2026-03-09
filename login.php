@@ -1,30 +1,50 @@
 <?php
 session_start();
 include("config/connection.php");
+require_once __DIR__ . "/includes/logger.php";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email    = $_POST['email'];
-    $password = $_POST['password'];
 
-    $sql = "SELECT * FROM users WHERE email = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
+$email    = $_POST['email'];
+$password = $_POST['password'];
 
-    if ($result->num_rows === 1) {
-        $row = $result->fetch_assoc();
-        if ($password === $row['password']) { // replace with password_verify() later
-            $_SESSION['user_id'] = $row['id'];
-            $_SESSION['full_name'] = $row['full_name'];
-            header("Location: dashboard.php");
-            exit();
-        } else {
-            $error = "Invalid password.";
-        }
-    } else {
-        $error = "No account found with that email.";
-    }
+$sql = "SELECT id, full_name, password FROM users WHERE email = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $email);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows === 1) {
+
+$row = $result->fetch_assoc();
+
+if (password_verify($password, $row['password'])) {
+
+$_SESSION['user_id'] = $row['id'];
+$_SESSION['full_name'] = $row['full_name'];
+
+logActivity(
+$conn,
+$row['id'],
+"User Login",
+"User logged into the system"
+);
+
+header("Location: dashboard.php");
+exit();
+
+} else {
+
+$error = "Invalid password.";
+
+}
+
+} else {
+
+$error = "No account found with that email.";
+
+}
+
 }
 ?>
 <!DOCTYPE html>

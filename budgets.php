@@ -1,6 +1,7 @@
 <?php
 session_start();
 include("config/connection.php");
+require_once __DIR__ . "/includes/logger.php";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -9,109 +10,214 @@ if (!isset($_SESSION['user_id'])) {
 
 $uid = $_SESSION['user_id'];
 
-// Fetch budgets with category names
-$budgetQuery = $conn->query("SELECT b.id, b.budget_limit, c.category_name,
-                                    (SELECT SUM(amount) FROM expenses e WHERE e.category_id = b.category_id AND e.user_id=$uid) AS spent
-                             FROM budgets b
-                             JOIN categories c ON b.category_id = c.id
-                             WHERE b.user_id=$uid");
+/* SAVE BUDGET */
+if(isset($_POST['save_budget'])){
+
+    $category_id = $_POST['category_id'];
+    $limit = $_POST['budget_limit'];
+
+    $check = $conn->query("
+    SELECT id FROM budgets
+    WHERE user_id=$uid AND category_id=$category_id
+    ");
+
+    if($check->num_rows > 0){
+
+        $conn->query("
+        UPDATE budgets
+        SET budget_limit='$limit'
+        WHERE user_id=$uid AND category_id=$category_id
+        ");
+
+    } else {
+
+        $conn->query("
+        INSERT INTO budgets (user_id,category_id,budget_limit)
+        VALUES ($uid,$category_id,'$limit')
+        ");
+
+    }
+
+    $cat = $conn->query("SELECT category_name FROM categories WHERE id=$category_id")->fetch_assoc();
+
+    logActivity(
+        $conn,
+        $uid,
+        "Updated Budget Limit",
+        "Category: ".$cat['category_name']." | Limit: ₱".$limit
+    );
+
+    header("Location: budgets.php");
+    exit();
+}
+
+/* GET CATEGORIES */
+$categories = $conn->query("
+SELECT * FROM categories
+WHERE user_id=$uid
+");
+
+/* GET BUDGETS */
+$budgetData = [];
+
+$b = $conn->query("SELECT * FROM budgets WHERE user_id=$uid");
+
+while($row = $b->fetch_assoc()){
+    $budgetData[$row['category_id']] = $row['budget_limit'];
+}
+
 ?>
+
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Budgets - AllowanceSense</title>
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background: #2563EB;
-            color: #fff;
-        }
-        .progress-bar {
-            width: 100%;
-            background: #eee;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 20px;
-            background: #22C55E;
-            text-align: center;
-            color: #fff;
-            font-size: 12px;
-        }
-    </style>
+<title>Budgets</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
-    <div class="sidebar">
-        <h2>AllowanceSense</h2>
-        <a href="dashboard.php">Dashboard</a>
-        <a href="expenses.php">Expenses</a>
-        <a href="allowances.php">Allowance</a>
-        <a href="budgets.php" class="active">Budget</a>
-        <a href="reports.php">Reports</a>
-        <a href="categories.php">Categories</a>
-        <a href="activity_log.php">Activity Log</a>
-        <a href="settings.php">Settings</a>
-        <a href="logout.php">Logout</a>
-    </div>
 
-    <div class="container">
-        <h2>Budget Management</h2>
+<div class="dashboard">
 
-        <table>
-            <tr>
-                <th>Category</th>
-                <th>Spent</th>
-                <th>Limit</th>
-                <th>Status</th>
-            </tr>
-            <?php while($row = $budgetQuery->fetch_assoc()): 
-                $spent = $row['spent'] ?? 0;
-                $limit = $row['budget_limit'];
-                $percent = $limit > 0 ? round(($spent / $limit) * 100) : 0;
-            ?>
-            <tr>
-                <td><?= htmlspecialchars($row['category_name']); ?></td>
-                <td>₱<?= number_format($spent, 2); ?></td>
-                <td>₱<?= number_format($limit, 2); ?></td>
-                <td>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: <?= $percent ?>%">
-                            <?= $percent ?>%
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            <?php endwhile; ?>
-        </table>
+<!-- SIDEBAR -->
+<div class="sidebar">
 
-        <h3>Add / Update Budget</h3>
-        <form method="POST" action="set_budget.php">
-            <label>Category</label>
-            <select name="category_id" required>
-                <?php
-                $categories = $conn->query("SELECT * FROM categories WHERE user_id=$uid");
-                while($cat = $categories->fetch_assoc()):
-                ?>
-                    <option value="<?= $cat['id']; ?>"><?= htmlspecialchars($cat['category_name']); ?></option>
-                <?php endwhile; ?>
-            </select>
+<h2>AllowanceSense</h2>
 
-            <label>Budget Limit</label>
-            <input type="number" name="budget_limit" step="0.01" required>
+<a href="dashboard.php">Dashboard</a>
+<a href="expenses.php">Expenses</a>
+<a href="allowances.php">Allowance</a>
+<a href="budgets.php" class="active">Budget</a>
+<a href="reports.php">Reports</a>
+<a href="categories.php">Categories</a>
+<a href="activity_log.php">Activity Log</a>
+<a href="settings.php">Settings</a>
+<a href="logout.php">Logout</a>
 
-            <button type="submit">Save Budget</button>
-        </form>
-    </div>
+</div>
+
+
+<div class="content budget-page">
+
+<h1 class="budget-title">Budget Limits</h1>
+<p class="budget-sub">Set spending limits for each category to stay on track.</p>
+
+<div class="budget-grid">
+
+<?php while($c = $categories->fetch_assoc()): ?>
+
+<?php
+
+$cid = $c['id'];
+$limit = $budgetData[$cid] ?? 0;
+
+/* SPENT */
+$spentQuery = $conn->query("
+SELECT SUM(amount) as spent
+FROM expenses
+WHERE user_id=$uid
+AND category_id=$cid
+");
+
+$row = $spentQuery->fetch_assoc();
+$spent = $row['spent'] ?? 0;
+
+$left = $limit - $spent;
+$percent = ($limit>0)?($spent/$limit)*100:0;
+$percent = min($percent,100);
+
+$letter = strtoupper(substr($c['category_name'],0,1));
+
+?>
+
+<div class="budget-card">
+
+<div class="budget-top">
+
+<div class="budget-icon" style="background:<?= $c['color'] ?>">
+<?= $letter ?>
+</div>
+
+<div class="budget-name">
+<strong><?= $c['category_name'] ?></strong>
+<span>Monthly Limit</span>
+</div>
+
+<button class="edit-btn" onclick="editBudget(<?= $cid ?>)">✏</button>
+
+</div>
+
+
+<h2 class="budget-amount" id="amount-<?= $cid ?>">
+₱<?= number_format($limit,2) ?>
+</h2>
+
+
+<form method="POST" class="budget-form" id="form-<?= $cid ?>">
+
+<input type="hidden" name="category_id" value="<?= $cid ?>">
+
+<input
+type="number"
+step="0.01"
+name="budget_limit"
+value="<?= $limit ?>"
+class="budget-input"
+/>
+
+<button name="save_budget" class="save-btn">✔</button>
+
+</form>
+
+
+<div class="budget-info">
+
+<span>Spent: ₱<?= number_format($spent,2) ?></span>
+
+<?php if($left>=0): ?>
+
+<span>Left: ₱<?= number_format($left,2) ?></span>
+
+<?php else: ?>
+
+<span class="over">Over by ₱<?= number_format(abs($left),2) ?></span>
+
+<?php endif; ?>
+
+</div>
+
+
+<div class="progress">
+<div class="progress-bar" style="width:<?= $percent ?>%; background:<?= $c['color'] ?>"></div>
+</div>
+
+<?php if($left<0): ?>
+
+<div class="budget-warning">
+⚠ You have exceeded your budget for this category!
+</div>
+
+<?php endif; ?>
+
+</div> <!-- CLOSE budget-card -->
+
+<?php endwhile; ?>
+
+</div>
+</div>
+</div>
+
+
+<script>
+
+function editBudget(id){
+
+document.getElementById("amount-"+id).style.display="none";
+document.getElementById("form-"+id).style.display="flex";
+
+}
+
+</script>
+
 </body>
 </html>

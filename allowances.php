@@ -1,6 +1,7 @@
 <?php
 session_start();
 include("config/connection.php");
+require_once __DIR__ . "/includes/logger.php";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -26,6 +27,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt = $conn->prepare("INSERT INTO allowances (user_id, amount, start_date, end_date) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("idss", $uid, $amount, $start_date, $end_date);
     $stmt->execute();
+
+    logActivity(
+    $conn,
+    $uid,
+    "Updated Allowance",
+    "Allowance set to ₱".$amount." from ".$start_date." to ".$end_date
+    );
 
     header("Location: allowances.php");
     exit();
@@ -71,7 +79,10 @@ $historyResult = $historyQuery->get_result();
     </div>
 <div class="content allowances-page">
 
-<h2 class="page-title">Allowance Management</h2>
+<div>
+<h1 class="page-title">Allowance Management</h1>
+<p class="page-sub">Set or update your allowance for the month</p>
+</div>
 
 <!-- TOP GRID -->
 <div class="allowance-grid">
