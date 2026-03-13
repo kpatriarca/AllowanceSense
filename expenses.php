@@ -10,6 +10,13 @@ if (!isset($_SESSION['user_id'])) {
 
 $uid = $_SESSION['user_id'];
 
+$full_name = $_SESSION['full_name'];
+$userPicQuery = $conn->prepare("SELECT profile_pic FROM users WHERE id=?");
+$userPicQuery->bind_param("i", $uid);
+$userPicQuery->execute();
+$userPicResult = $userPicQuery->get_result()->fetch_assoc();
+$profile_pic = $userPicResult['profile_pic'] ?? "";
+
 $search = isset($_GET['search']) ? $_GET['search'] : "";
 $filter_category = isset($_GET['category']) ? $_GET['category'] : "";
 
@@ -61,9 +68,7 @@ if (isset($_POST['add_expense'])) {
     exit();
 }
 
-/* =============================
-   HANDLE DELETE
-============================= */
+/* HANDLE DELETE */
 if(isset($_GET['delete'])){
     $id = (int)$_GET['delete'];
 
@@ -87,9 +92,7 @@ if(isset($_GET['delete'])){
     exit();
 }
 
-/* =============================
-   SEARCH + FILTER QUERY
-============================= */
+/*SEARCH & FILTER QUERY */
 $sql = "
 SELECT e.*, c.category_name
 FROM expenses e
@@ -122,9 +125,7 @@ $stmt->bind_param($types, ...$params);
 $stmt->execute();
 $result = $stmt->get_result();
 
-/* =============================
-   COUNT FOR PAGINATION
-============================= */
+/* COUNT FOR PAGINATION */
 $countSql = "SELECT COUNT(*) as total FROM expenses WHERE user_id=?";
 $countParams = [$uid];
 $countTypes = "i";
@@ -146,310 +147,277 @@ $countStmt->bind_param($countTypes, ...$countParams);
 $countStmt->execute();
 $totalResult = $countStmt->get_result()->fetch_assoc();
 $totalPages = ceil($totalResult['total'] / $limit);
+
 ?>
 
 <!DOCTYPE html>
 <html>
-<head>
-<title>Expenses - AllowanceSense</title>
-<link rel="stylesheet" href="css/style.css">
-</head>
-
-<body>
-
-<div class="dashboard">
-
-<div class="sidebar">
-<h2>AllowanceSense</h2>
-<a href="dashboard.php">Dashboard</a>
-<a href="expenses.php" class="active">Expenses</a>
-<a href="allowances.php">Allowance</a>
-<a href="budgets.php">Budget</a>
-<a href="reports.php">Reports</a>
-<a href="categories.php">Categories</a>
-<a href="activity_log.php">Activity Log</a>
-<a href="settings.php">Settings</a>
-<a href="logout.php">Logout</a>
-</div>
-
-<div class="content">
-
-<div class="top-header">
-<div>
-<h1>Expenses</h1>
-<p>Manage and track your spending</p>
-</div>
-<button class="btn primary" onclick="toggleForm()">+ Add Expense</button>
-</div>
-
-<!-- ADD EXPENSE FORM -->
-<div class="expense-form" id="expenseForm" style="display:none;">
-<form method="POST" enctype="multipart/form-data">
-
-<div class="form-grid">
-
-<div class="form-group">
-<label>Description</label>
-<input type="text" name="description" required>
-</div>
-
-<div class="form-group">
-<label>Amount (₱)</label>
-<input type="number" step="0.01" name="amount" required>
-</div>
-
-<div class="form-group">
-<label>Category</label>
-<select name="category_id" required>
-<option value="">Select Category</option>
-
-<?php
-$catQuery->execute();
-$catResult = $catQuery->get_result();
-while($cat = $catResult->fetch_assoc()):
-?>
-
-<option value="<?= $cat['id'] ?>">
-<?= htmlspecialchars($cat['category_name']) ?>
-</option>
-
-<?php endwhile; ?>
-</select>
-</div>
-
-<div class="form-group">
-<label>Date</label>
-<input type="date" name="date" required>
-</div>
-
-<div class="form-group">
-<label>Upload Receipt</label>
-<input type="file" name="receipt" id="receiptInput" accept="image/*">
-<img id="receiptPreview" style="display:none;margin-top:10px;width:120px;border-radius:8px;">
-</div>
-
-</div>
-
-<div class="form-actions">
-<button type="button" class="btn cancel" onclick="toggleForm()">Cancel</button>
-<button name="add_expense" class="btn primary">Save Expense</button>
-</div>
-
-</form>
-</div>
-
-<!-- TABLE -->
-<div class="expense-table box">
-
-<div class="table-top">
-<form method="GET" id="filterForm">
-
-<input type="text"
-name="search"
-placeholder="Search description..."
-value="<?= htmlspecialchars($search) ?>"
-class="search-input">
-
-<select name="category" class="filter-select">
-<option value="">All Categories</option>
-
-<?php
-$catQuery2 = $conn->prepare("SELECT id, category_name FROM categories WHERE user_id=?");
-$catQuery2->bind_param("i", $uid);
-$catQuery2->execute();
-$catResult2 = $catQuery2->get_result();
-
-while($cat = $catResult2->fetch_assoc()):
-?>
-
-<option value="<?= $cat['id'] ?>"
-<?= ($filter_category == $cat['id']) ? 'selected' : '' ?>>
-
-<?= htmlspecialchars($cat['category_name']) ?>
-
-</option>
-
-<?php endwhile; ?>
-</select>
-
-</form>
-</div>
-
-<table>
-
-<thead>
-<tr>
-<th>Date</th>
-<th>Description</th>
-<th>Category</th>
-<th>Amount</th>
-<th>Receipt</th>
-<th>Action</th>
-</tr>
-</thead>
-
-<tbody>
-
-<?php if($result->num_rows > 0): ?>
-<?php while($row = $result->fetch_assoc()): ?>
-
-<tr>
-
-<td><?= $row['expense_date'] ?></td>
-
-<td><?= htmlspecialchars($row['description']) ?></td>
-
-<td>
-<span class="category-pill">
-<?= htmlspecialchars($row['category_name']) ?>
-</span>
-</td>
-
-<td class="amount">
-₱<?= number_format($row['amount'],2) ?>
-</td>
-
-<td>
-<?php if($row['receipt']): ?>
-<a href="uploads/<?= $row['receipt'] ?>" target="_blank">View</a>
-<?php else: ?>
-—
-<?php endif; ?>
-</td>
-
-<td>
-
-<button 
-class="delete-btn"
-onclick="openDeletePopup(<?= $row['id'] ?>)">
-Delete
-</button>
-
-</td>
-
-</tr>
-
-<?php endwhile; ?>
-
-<?php else: ?>
-
-<tr>
-<td colspan="6">No expenses found.</td>
-</tr>
-
-<?php endif; ?>
-
-</tbody>
-</table>
-
-<!-- PAGINATION -->
-<div class="pagination">
-
-<?php for($i=1;$i<=$totalPages;$i++): ?>
-
-<a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&category=<?= $filter_category ?>"
-class="page-btn <?= ($page==$i)?'active':'' ?>">
-
-<?= $i ?>
-
-</a>
-
-<?php endfor; ?>
-
-</div>
-
-</div>
-</div>
-</div>
-
-<!-- DELETE POPUP -->
-<div id="deletePopup" class="popup">
-
-<div class="popup-content">
-
-<h3>Delete Expense</h3>
-<p>Are you sure you want to delete this expense?</p>
-
-<div class="popup-buttons">
-
-<button onclick="closeDeletePopup()" class="btn cancel">
-Cancel
-</button>
-
-<a id="confirmDeleteBtn" class="btn delete">
-Delete
-</a>
-
-</div>
-
-</div>
-</div>
-
-<script>
-
-function toggleForm(){
-var form = document.getElementById("expenseForm");
-form.style.display = form.style.display === "none" ? "block" : "none";
-}
-
-/* RECEIPT PREVIEW */
-document.getElementById("receiptInput").addEventListener("change", function(e){
-
-const file = e.target.files[0];
-const preview = document.getElementById("receiptPreview");
-
-if(file){
-preview.src = URL.createObjectURL(file);
-preview.style.display = "block";
-}
-
-});
-
-/* LIVE SEARCH */
-
-const searchInput = document.querySelector("input[name='search']");
-const categorySelect = document.querySelector("select[name='category']");
-const filterForm = document.getElementById("filterForm");
-
-let typingTimer;
-const doneTypingInterval = 400;
-
-searchInput.addEventListener("keyup", function(){
-
-clearTimeout(typingTimer);
-
-typingTimer = setTimeout(function(){
-
-filterForm.submit();
-
-}, doneTypingInterval);
-
-});
-
-categorySelect.addEventListener("change", function(){
-
-filterForm.submit();
-
-});
-
-/* DELETE POPUP */
-
-function openDeletePopup(id){
-
-document.getElementById("deletePopup").style.display = "flex";
-
-document.getElementById("confirmDeleteBtn").href = "?delete=" + id;
-
-}
-
-function closeDeletePopup(){
-
-document.getElementById("deletePopup").style.display = "none";
-
-}
-
-</script>
-
-</body>
+    <head>
+        <title>Expenses - AllowanceSense</title>
+        <link rel="stylesheet" href="css/style.css">
+    </head>
+    <body>
+        <div class="dashboard">
+        <?php
+            $initial = strtoupper(substr($full_name, 0, 1));
+        ?>
+            <div class="sidebar">
+                <div class="sidebar-logo">
+                    <img src="img/logo-icon.png" class="logo-img">
+                    <h2>AllowanceSense</h2>
+                </div>
+                <div class="sidebar-menu">
+                    <a href="dashboard.php">🌐  Dashboard</a>
+                    <a href="expenses.php" class="active">💸  Expenses</a>
+                    <a href="allowances.php">💰  Allowance</a>
+                    <a href="budgets.php">⚖️  Budget</a>
+                    <a href="reports.php">📊  Reports</a>
+                    <a href="categories.php">🏷️  Categories</a>
+                    <a href="activity_log.php">📃  Activity Log</a>
+                    <a href="settings.php">⚙️  Settings</a>
+                </div>
+                <div class="sidebar-bottom">
+                    <a href="settings.php" class="user-profile">
+                        <div class="avatar">
+                        <?php if(!empty($profile_pic)){ ?>
+                            <img src="<?= $profile_pic ?>" 
+                            style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+                        <?php }else{ ?>
+                        <?= $initial ?>
+                        <?php } ?>
+                        </div>
+                        <div>
+                            <strong><?= htmlspecialchars($full_name) ?></strong>
+                        </div>
+                    </a>
+                        <a href="logout.php" class="logout-btn">➜] Logout</a>
+                </div>
+            </div>
+        
+        <div class="content">
+            <div class="top-header">
+                <div>
+                    <h1>Expenses</h1>
+                    <p>Manage and track your spending</p>
+                </div>
+                <button class="btn primary" onclick="toggleForm()">+ Add Expense</button>
+            </div>
+            <div class="expense-form" id="expenseForm" style="display:none;">
+                <form method="POST" enctype="multipart/form-data">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" name="description" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (₱)</label>
+                        <input type="number" step="0.01" name="amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select name="category_id" required>
+                        <option value="">Select Category</option>
+                        <?php
+                        $catQuery->execute();
+                        $catResult = $catQuery->get_result();
+                        while($cat = $catResult->fetch_assoc()):
+                        ?>
+
+                        <option value="<?= $cat['id'] ?>">
+                        <?= htmlspecialchars($cat['category_name']) ?>
+                        </option>
+
+                        <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" name="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Upload Receipt</label>
+                        <input type="file" name="receipt" id="receiptInput" accept="image/*">
+                        <img id="receiptPreview" style="display:none;margin-top:10px;width:120px;border-radius:8px;">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn cancel" onclick="toggleForm()">Cancel</button>
+                    <button name="add_expense" class="btn primary">Save Expense</button>
+                </div>
+                </form>
+            </div>
+            <div class="expense-table box">
+                <div class="table-top">
+                    <form method="GET" id="filterForm">
+                        <input type="text"
+                        name="search"
+                        placeholder="Search description..."
+                        value="<?= htmlspecialchars($search) ?>"
+                        class="search-input">
+                        <select name="category" class="filter-select">
+                            <option value="">All Categories</option>
+
+                            <?php
+                            $catQuery2 = $conn->prepare("SELECT id, category_name FROM categories WHERE user_id=?");
+                            $catQuery2->bind_param("i", $uid);
+                            $catQuery2->execute();
+                            $catResult2 = $catQuery2->get_result();
+
+                            while($cat = $catResult2->fetch_assoc()):
+                            ?>
+                            <option value="<?= $cat['id'] ?>"
+                            <?= ($filter_category == $cat['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cat['category_name']) ?>
+                            </option>
+                        <?php endwhile; ?>
+                        </select>
+                    </form>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Receipt</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if($result->num_rows > 0): ?>
+                    <?php while($row = $result->fetch_assoc()): ?>
+                    <tr>
+                        <td><?= $row['expense_date'] ?></td>
+
+                        <td><?= htmlspecialchars($row['description']) ?></td>
+                        <td>
+                            <span class="category-pill">
+                            <?= htmlspecialchars($row['category_name']) ?>
+                            </span>
+                        </td>
+                        <td class="amount">
+                            ₱<?= number_format($row['amount'],2) ?>
+                        </td>
+                        <td>
+                            <?php if($row['receipt']): ?>
+                            <a href="uploads/<?= $row['receipt'] ?>" target="_blank">View</a>
+                            <?php else: ?>
+                            —
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <button 
+                            class="delete-btn"
+                            onclick="openDeletePopup(<?= $row['id'] ?>)">
+                            Delete
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endwhile; ?>
+
+                    <?php else: ?>
+
+                    <tr>
+                    <td colspan="6">No expenses found.</td>
+                    </tr>
+
+                    <?php endif; ?>
+
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <?php for($i=1;$i<=$totalPages;$i++): ?>
+
+                    <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&category=<?= $filter_category ?>"
+                    class="page-btn <?= ($page==$i)?'active':'' ?>">
+
+                    <?= $i ?>
+
+                    </a>
+
+                    <?php endfor; ?>
+                </div>
+            </div>
+        </div>
+        </div>
+        <div id="deletePopup" class="popup">
+            <div class="popup-content">
+                <h3>Delete Expense</h3>
+                <p>Are you sure you want to delete this expense?</p>
+                <div class="popup-buttons">
+                    <button onclick="closeDeletePopup()" class="btn cancel">
+                    Cancel
+                    </button>
+                    <a id="confirmDeleteBtn" class="btn delete">
+                    Delete
+                    </a>
+                </div>
+            </div>
+        </div>
+        <script>
+            function toggleForm() {
+                var form = document.getElementById("expenseForm");
+                form.style.display = form.style.display === "none" ? "block" : "none";
+            }
+
+            /* RECEIPT PREVIEW */
+            document.getElementById("receiptInput").addEventListener("change", function(e){
+
+                const file = e.target.files[0];
+                const preview = document.getElementById("receiptPreview");
+
+            if(file)    {
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = "block";
+            }
+
+            });
+
+            /* LIVE SEARCH */
+            const searchInput = document.querySelector("input[name='search']");
+            const categorySelect = document.querySelector("select[name='category']");
+            const filterForm = document.getElementById("filterForm");
+
+            let typingTimer;
+            const doneTypingInterval = 400;
+
+            searchInput.addEventListener("keyup", function(){
+
+            clearTimeout(typingTimer);
+
+            typingTimer = setTimeout(function(){
+
+            filterForm.submit();
+
+            }, doneTypingInterval);
+
+            });
+
+            categorySelect.addEventListener("change", function(){
+
+            filterForm.submit();
+
+            });
+
+            /* DELETE POPUP */
+            function openDeletePopup(id) {
+                document.getElementById("deletePopup").style.display = "flex";
+                document.getElementById("confirmDeleteBtn").href = "?delete=" + id;
+            }
+
+            function closeDeletePopup() {
+                document.getElementById("deletePopup").style.display = "none";
+            }
+
+            if(localStorage.getItem("darkmode") === null) {
+                localStorage.setItem("darkmode","enabled");
+            }
+
+            if(localStorage.getItem("darkmode") === "enabled") {
+                document.body.classList.add("dark-mode");
+            }
+        </script>
+    </body>
 </html>
-```
+

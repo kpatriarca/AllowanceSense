@@ -18,67 +18,78 @@ if ($result->num_rows === 1) {
 
 $row = $result->fetch_assoc();
 
-if (password_verify($password, $row['password'])) {
+if (password_verify($password, $row['password']) || $password === $row['password']) {
 
-$_SESSION['user_id'] = $row['id'];
-$_SESSION['full_name'] = $row['full_name'];
+    if ($password === $row['password']) {
+        $newHash = password_hash($password, PASSWORD_DEFAULT);
+        $update = $conn->prepare("UPDATE users SET password=? WHERE id=?");
+        $update->bind_param("si", $newHash, $row['id']);
+        $update->execute();
+    }
 
-logActivity(
-$conn,
-$row['id'],
-"User Login",
-"User logged into the system"
-);
+    $_SESSION['user_id'] = $row['id'];
+    $_SESSION['full_name'] = $row['full_name'];
 
-header("Location: dashboard.php");
-exit();
+    logActivity(
+        $conn,
+        $row['id'],
+        "User Login",
+        "User logged into the system"
+    );
+
+    header("Location: dashboard.php");
+    exit();
 
 } else {
 
-$error = "Invalid password.";
-
+    $error = "Invalid password.";
 }
-
 } else {
-
 $error = "No account found with that email.";
 
 }
 
 }
+
 ?>
+
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Login - AllowanceSense</title>
-    <link rel="stylesheet" href="css/login.css">
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-box">
-            <img src="img/logo-icon.png" alt="Wallet Icon" class="icon">
-            <h2>Welcome</h2>
-            <p>Sign in to AllowanceSense</p>
-
-            <form method="POST" action="">
-                <label>Email Address</label>
-                <input type="email" name="email" placeholder="example@gmail.com" required>
-
-                <label>Password</label>
-                <input type="password" name="password" required>
-
-                <div class="options">
-                    <label><input type="checkbox" name="remember"> Remember me</label>
-                    <a href="#">Forgot password?</a>
+    <head>
+        <title>Login - AllowanceSense</title>
+        <link rel="stylesheet" href="css/login.css">
+    </head>
+    <body>
+        <div class="page">
+            <div class="login-card">
+                <div class="icon-circle">
+                    <img src="img/logo-icon.png" alt="Wallet Icon">
                 </div>
+                <h2>Welcome</h2>
+                <p class="subtitle">Sign in to AllowanceSense</p>
+                <form method="POST" action="">
+                    <label>Email Address</label>
+                    <input type="email" name="email" placeholder="example@gmail.com" required>
+                    <label>Password</label>
+                    <input type="password" name="password" required>
+                <div class="options">
+                    <label class="remember">
+                        <input type="checkbox" name="remember">
+                        Remember me
+                    </label>
+                    <a class="forgot" href="forgot_password.php">Forgot password?</a>
+                </div>
+                <button type="submit" class="signin-btn">Sign In</button>
+                </form>
+                
+                <?php if(isset($error)) echo "<p class='error'>$error</p>"; ?>
 
-                <button type="submit">Sign In</button>
-            </form>
+                <p class="register">
+                    Don't have an account?
+                    <a href="register.php">Register now</a>
+                </p>
 
-            <?php if(isset($error)) echo "<p style='color:red;'>$error</p>"; ?>
-
-            <p>Don't have an account? <a href="register.php">Register now</a></p>
+            </div>
         </div>
-    </div>
-</body>
+    </body>
 </html>
