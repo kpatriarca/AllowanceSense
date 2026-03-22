@@ -9,15 +9,27 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $uid = $_SESSION['user_id'];
+
+$selectedMonth = $_GET['month'] ?? date("m");
+$year = date("Y");
+
+$monthStart = "$year-$selectedMonth-01";
+$monthEnd = date("Y-m-t", strtotime($monthStart));
+
 /* UPDATE SAVINGS GOAL */
 if (isset($_POST['update_goal'])) {
+
     $new_goal = floatval($_POST['new_goal']);
 
-    $updateGoal = $conn->prepare("UPDATE users SET savings_goal=? WHERE id=?");
-    $updateGoal->bind_param("di", $new_goal, $uid);
-    $updateGoal->execute();
+    $stmt = $conn->prepare("
+        UPDATE users 
+        SET savings_goal = ? 
+        WHERE id = ?
+    ");
+    $stmt->bind_param("di", $new_goal, $uid);
+    $stmt->execute();
 
-    header("Location: dashboard.php");
+    header("Location: dashboard.php?month=".$selectedMonth."&goal_updated=1");
     exit();
 }
 
@@ -56,14 +68,16 @@ SELECT
         FROM allowances
         WHERE user_id = $uid
         AND type='add'
-        AND id > s.id
+        AND MONTH(start_date) = $selectedMonth
+        AND YEAR(start_date) = $year
     )
     - (
         SELECT IFNULL(SUM(amount),0)
         FROM allowances
         WHERE user_id = $uid
         AND type='less'
-        AND id > s.id
+        AND MONTH(start_date) = $selectedMonth
+        AND YEAR(start_date) = $year
     ) AS total_allowance,
     s.start_date,
     s.end_date
@@ -72,6 +86,8 @@ FROM allowances s
 
 WHERE s.user_id = $uid
 AND s.type='set'
+AND MONTH(s.start_date) = $selectedMonth
+AND YEAR(s.start_date) = $year
 
 ORDER BY s.id DESC
 LIMIT 1
@@ -90,7 +106,7 @@ if ($start_date && $end_date) {
         SELECT SUM(amount) AS total
         FROM expenses
         WHERE user_id = $uid
-        AND expense_date BETWEEN '$start_date' AND '$end_date'
+        AND expense_date BETWEEN '$monthStart' AND '$monthEnd'
     ");
 } else {
     $totalQuery = $conn->query("
@@ -124,7 +140,7 @@ SELECT c.category_name, c.color, SUM(e.amount) as total
 FROM expenses e
 JOIN categories c ON e.category_id = c.id
 WHERE e.user_id = $uid
-AND e.expense_date BETWEEN '$start_date' AND '$end_date'
+AND e.expense_date BETWEEN '$monthStart' AND '$monthEnd'
 GROUP BY e.category_id
 ");
 
@@ -187,7 +203,22 @@ $categoryColors[] = $row['color'];
             <div class="top-header">
                 <div>
                     <h1><?= $greeting ?>, <?= htmlspecialchars($full_name) ?>!</h1>
+                    <div class="date-month-row">
                     <p>It's <?= $currentDate ?></p>
+                    <form method="GET" class="month-form">
+                    <select name="month" onchange="this.form.submit()" class="month-filter">
+                        <?php
+                    $currentMonth = date("m");
+                    for ($m = 1; $m <= 12; $m++) {
+                        $value = str_pad($m, 2, "0", STR_PAD_LEFT);
+                        $selected = (isset($_GET['month']) && $_GET['month'] == $value) || (!isset($_GET['month']) && $value == $currentMonth) ? "selected" : "";
+                        echo "<option value='$value' $selected>" . date("F", mktime(0,0,0,$m,1)) . "</option>";
+                    }
+                    ?>
+                    </select>
+                    </form>
+                    </div>
+                    
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <form method="POST" id="goalForm" class="goal-box" style="display:none; gap:5px; align-items:center;">
@@ -231,18 +262,24 @@ $categoryColors[] = $row['color'];
                 </div>
                 </div>
                 <?php
-                $savingsColor = ($remaining < $savings_goal) ? "#ef4444" : "#0f172a";
+                $displayGoal = "₱" . number_format($savings_goal, 2);
+                $savingsColor = "#057796";
+
+                if ($savings_goal > $remaining) {
+                    $displayGoal = "-₱" . number_format($savings_goal, 2);
+                    $savingsColor = "#ef4444";
+                }
                 ?>
                 <div class="card dashboard-card">
                     <div class="card-icon yellow">
                         <img src="img/savings-icon.png">
                     </div>
-                <div class="card-info">
-                    <h4>Savings Goal</h4>
-                    <h2 style="color:<?= $savingsColor ?>">
-                        ₱<?= number_format($savings_goal,2) ?>
-                    </h2>
-                </div>
+                    <div class="card-info">
+                        <h4>Savings Goal</h4>
+                        <h2 style="color:<?= $savingsColor ?>">
+                            <?= $displayGoal ?>
+                        </h2>
+                    </div>
                 </div>
             </div>
             <div class="main-grid">

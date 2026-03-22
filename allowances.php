@@ -31,24 +31,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     /* MONTHLY ALLOWANCE */
    if ($type == "set") {
 
-    $start_date = $_POST['start_date'] ?? '';
-    $end_date   = $_POST['end_date'] ?? '';
+    $month = $_POST['month'];
+    $year = date("Y");
+
+    $start_date = "$year-$month-01";
+    $end_date = date("Y-m-t", strtotime($start_date));
 
     if(empty($start_date) || empty($end_date) || $start_date > $end_date){
         header("Location: allowances.php");
         exit();
     }
 
-    $closeOld = $conn->prepare("
-        UPDATE allowances 
-        SET end_date = CURDATE()
-        WHERE user_id = ?
-        AND type = 'set'
-        AND end_date >= CURDATE()
+    /* DELETE OLD ADJUSTMENTS FOR THAT MONTH */
+    $deleteAdjustments = $conn->prepare("
+        DELETE FROM allowances
+        WHERE user_id=?
+        AND type IN ('add','less')
+        AND MONTH(start_date)=?
+        AND YEAR(start_date)=?
     ");
-
-    $closeOld->bind_param("i",$uid);
-    $closeOld->execute();
+    $deleteAdjustments->bind_param("iii",$uid,$month,$year);
+    $deleteAdjustments->execute();
 
     }
 
@@ -57,10 +60,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $activeQuery = $conn->prepare("
             SELECT start_date, end_date
-            FROM allowances
-            WHERE user_id=? AND type='set'
-            ORDER BY id DESC
-            LIMIT 1
+        FROM allowances
+        WHERE user_id=? 
+        AND type='set'
+        AND MONTH(start_date) = MONTH(CURDATE())
+        AND YEAR(start_date) = YEAR(CURDATE())
+        ORDER BY id DESC
+        LIMIT 1
         ");
 
         $activeQuery->bind_param("i",$uid);
@@ -113,14 +119,16 @@ SELECT
         FROM allowances
         WHERE user_id = ?
         AND type='add'
-        AND id > s.id
+        AND MONTH(start_date) = MONTH(CURDATE())
+        AND YEAR(start_date) = YEAR(CURDATE())
     )
     - (
         SELECT IFNULL(SUM(amount),0)
         FROM allowances
         WHERE user_id = ?
         AND type='less'
-        AND id > s.id
+        AND MONTH(start_date) = MONTH(CURDATE())
+        AND YEAR(start_date) = YEAR(CURDATE())
     ) AS total_allowance,
     s.start_date,
     s.end_date
@@ -129,6 +137,8 @@ FROM allowances s
 
 WHERE s.user_id = ?
 AND s.type='set'
+AND MONTH(s.start_date) = MONTH(CURDATE())
+AND YEAR(s.start_date) = YEAR(CURDATE())
 
 ORDER BY s.id DESC
 LIMIT 1
@@ -231,10 +241,17 @@ $historyResult = $historyQuery->get_result();
                     </div>
                     </div>
                     <div id="dateFields">
-                    <label>Start Date</label>
-                        <input type="date" name="start_date" id="startDate">
-                    <label>End Date</label>
-                        <input type="date" name="end_date" id="endDate">
+                        <label>Select Month</label>
+                        <select name="month" required>
+                        <?php
+                        $currentMonth = date("m");
+                        for ($m = 1; $m <= 12; $m++) {
+                            $value = str_pad($m, 2, "0", STR_PAD_LEFT);
+                            $selected = ($value == $currentMonth) ? "selected" : "";
+                            echo "<option value='$value' $selected>" . date("F", mktime(0,0,0,$m,1)) . "</option>";
+                        }
+                        ?>
+                        </select>
                     </div>
                     <div class="form-buttons">
                         <button type="submit" class="btn primary-btn">Save</button>
@@ -291,44 +308,21 @@ $historyResult = $historyQuery->get_result();
             </div>
         </div>
         <script>
-            document.querySelector(".modern-form").addEventListener("submit", function(e) {
-
-                let type = document.getElementById("allowanceType").value;
-                let start = document.getElementById("startDate").value;
-                let end = document.getElementById("endDate").value;
-
-                if(type === "set"){
-
-                    if(start && end && start > end){
-                        e.preventDefault();
-                        alert("Start date cannot be later than End date.");
-                    }
-
-                }
-            });
-
             function toggleDates() {
 
                 let type = document.getElementById("allowanceType").value;
                 let dates = document.getElementById("dateFields");
 
-                let start = document.getElementById("startDate");
-                let end = document.getElementById("endDate");
-
                 if(type === "set") {
-
                     dates.style.display = "block";
-                    start.required = true;
-                    end.required = true;
-
                 } else {
-
                     dates.style.display = "none";
-                    start.required = false;
-                    end.required = false;
-
                 }
             }
+
+            document.addEventListener("DOMContentLoaded", function(){
+                toggleDates();
+            });
 
             if(localStorage.getItem("darkmode") === null) {
                 localStorage.setItem("darkmode","enabled");

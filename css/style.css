@@ -177,9 +177,64 @@ margin:0;
     border-radius:8px;
 }
 
-.logout-btn:hover{
-background:#fee2e2;
-color:#b91c1c !important;
+.logout-btn:hover {
+    background:#fee2e2;
+    color:#b91c1c !important;
+}
+
+.date-month-row{
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.month-form{
+margin:0;
+}
+
+.month-filter{
+height:30px;
+}
+
+.month-filter {
+    padding:6px 12px;
+    border-radius:8px;
+    border:1px solid #e2e8f0;
+    background:white;
+    font-size:14px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.05);
+    cursor:pointer;
+    transition:0.2s;
+}
+
+#dateFields{
+margin-top:10px;
+}
+
+#dateFields select{
+width:100%;
+padding:10px;
+border-radius:8px;
+border:1px solid #e2e8f0;
+background:#f8fafc;
+}
+
+.month-filter:hover {
+ border-color:#0ea5e9;
+}
+
+.allowance-amount{
+font-size:36px;
+font-weight:700;
+margin-top:10px;
+}
+
+.date-range{
+background:#f1f5f9;
+display:inline-block;
+padding:6px 10px;
+border-radius:8px;
+font-size:13px;
 }
 
 .content {
@@ -1567,6 +1622,17 @@ background:#334155;
 color:#38bdf8;
 }
 
+.dark-mode .month-filter{
+background:#1e293b;
+border:1px solid #334155;
+color:#e2e8f0;
+}
+
+.dark-mode .date-range{
+background:#0f172a;
+border:1px solid #334155;
+}
+
 .dark-mode .card,
 .dark-mode .box,
 .dark-mode .settings-card,
@@ -1662,6 +1728,18 @@ color:#e2e8f0;
 background:#1e293b;
 color:#e2e8f0;
 border:1px solid #334155;
+}
+
+.dark-mode #dateFields{
+margin-top:10px;
+}
+
+.dark-mode #dateFields select{
+width:100%;
+padding:10px;
+border-radius:8px;
+border:1px solid;
+background:#0f172a;
 }
 
 .dark-mode .page-btn:hover{
