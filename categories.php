@@ -82,10 +82,43 @@ $id=$_GET['delete'];
 $get = $conn->query("SELECT category_name FROM categories WHERE id=$id AND user_id=$uid");
 $cat = $get->fetch_assoc();
 
+if(isset($_GET['delete'])){
+
+$id = intval($_GET['delete']);
+
+/* Get category name first */
+$get = $conn->query("SELECT category_name FROM categories WHERE id=$id AND user_id=$uid");
+$cat = $get->fetch_assoc();
+
+/* 1️⃣ Delete related budgets */
+$conn->query("
+DELETE FROM budgets 
+WHERE category_id=$id AND user_id=$uid
+");
+
+/* 2️⃣ Delete related expenses */
+$conn->query("
+DELETE FROM expenses 
+WHERE category_id=$id AND user_id=$uid
+");
+
+/* 3️⃣ Now delete the category */
 $conn->query("
 DELETE FROM categories
 WHERE id=$id AND user_id=$uid
 ");
+
+/* Log activity */
+logActivity(
+    $conn,
+    $uid,
+    "Deleted Category",
+    "Category: ".$cat['category_name']
+);
+
+header("Location: categories.php");
+exit();
+}
 
 logActivity(
     $conn,

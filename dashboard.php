@@ -60,7 +60,6 @@ if ($hour < 12) {
 $currentDate = date("F j, Y, g:i A");
 
 $allowanceQuery = $conn->query("
-
 SELECT
     s.amount
     + (
@@ -83,15 +82,12 @@ SELECT
     s.end_date
 
 FROM allowances s
-
 WHERE s.user_id = $uid
 AND s.type='set'
 AND MONTH(s.start_date) = $selectedMonth
 AND YEAR(s.start_date) = $year
-
 ORDER BY s.id DESC
 LIMIT 1
-
 ");
 
 $allowanceRow = $allowanceQuery->fetch_assoc();
